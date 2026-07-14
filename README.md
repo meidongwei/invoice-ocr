@@ -10,6 +10,8 @@
 - 批量处理，结果导出为 CSV
 - PySide6 图形界面，跨平台（Windows / macOS）
 
+![界面截图](assets/screenshot.png)
+
 ## 🚀 快速开始
 
 ### 环境要求

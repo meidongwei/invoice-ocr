@@ -12,3 +12,4 @@ dist/
 *.png
 *.jpg
 *.jpeg
+!assets/screenshot.png
