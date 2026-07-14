@@ -1,0 +1,14 @@
+.venv/
+.paddlex/
+__pycache__/
+*.pyc
+.DS_Store
+.tmp_page_*.png
+debug_*.txt
+202*.csv
+build/
+dist/
+*.pdf
+*.png
+*.jpg
+*.jpeg
