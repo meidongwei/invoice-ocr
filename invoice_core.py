@@ -91,9 +91,21 @@ def get_default_output_dir() -> Path:
     return Path.home()
 
 
+def _disable_onednn() -> None:
+    """强制禁用 Paddle 的 OneDNN/PIR executor，解决部分 CPU 的 ConvertPirAttribute 报错。"""
+    for key in (
+        "FLAGS_use_mkldnn",
+        "FLAGS_enable_pir_in_executor",
+        "FLAGS_use_new_executor",
+        "FLAGS_new_ir",
+    ):
+        os.environ[key] = "0"
+
+
 def setup_environment() -> None:
     os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(get_cache_dir()))
     os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+    _disable_onednn()
 
 
 setup_environment()
@@ -102,6 +114,9 @@ setup_environment()
 def get_ocr_engine():
     global _ocr_engine
     if _ocr_engine is None:
+        # 在 import paddle 之前最后确认环境变量已设置
+        _disable_onednn()
+
         from paddleocr import PaddleOCR
 
         _ocr_engine = PaddleOCR(lang="ch")
