@@ -1,0 +1,144 @@
+name: 打包 Windows / macOS EXE
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']          # 推送 v1.0.0 等标签时自动发布 Release
+  workflow_dispatch:       # 允许在 Actions 页面手动触发
+
+# 创建 Release 需要写权限
+permissions:
+  contents: write
+
+jobs:
+  # ---------- Windows ----------
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90    # 防止依赖/模型下载卡死导致无限等待
+
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: 缓存 OCR 模型（.paddlex）
+        uses: actions/cache@v4
+        with:
+          path: .paddlex
+          key: paddlex-win-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            paddlex-win-
+
+      - name: 安装依赖（清华源加速 + 超时重试）
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt `
+            --index-url https://pypi.tuna.tsinghua.edu.cn/simple `
+            --trusted-host pypi.tuna.tsinghua.edu.cn `
+            --timeout 120 --retries 10
+
+      - name: 预热 OCR 模型（下载并随 EXE 分发，用户免联网）
+        run: |
+          python -c "from invoice_core import warmup_ocr_engine; warmup_ocr_engine(print); print('models ready')"
+        continue-on-error: true   # 模型源临时不可用时仍产出 EXE（首启联网下载）
+
+      - name: PyInstaller 打包
+        run: python -m PyInstaller --noconfirm invoice_app_windows.spec
+
+      - name: 压缩产物为 zip
+        shell: pwsh
+        run: Compress-Archive -Path "dist/发票识别" -DestinationPath "invoice-ocr-windows.zip" -Force
+
+      - name: 上传构建产物（保留 30 天）
+        uses: actions/upload-artifact@v4
+        with:
+          name: invoice-ocr-windows
+          path: invoice-ocr-windows.zip
+          retention-days: 30
+
+  # ---------- macOS ----------
+  build-macos:
+    runs-on: macos-latest     # Apple Silicon (arm64)；如需 Intel 改为 macos-13
+    timeout-minutes: 90
+
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      LANG: "en_US.UTF-8"
+      LC_ALL: "en_US.UTF-8"
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: 缓存 OCR 模型（.paddlex）
+        uses: actions/cache@v4
+        with:
+          path: .paddlex
+          key: paddlex-mac-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            paddlex-mac-
+
+      - name: 安装依赖（清华源加速 + 超时重试）
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt \
+            --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+            --trusted-host pypi.tuna.tsinghua.edu.cn \
+            --timeout 120 --retries 10
+
+      - name: 预热 OCR 模型（下载并随 .app 分发，用户免联网）
+        run: |
+          python -c "from invoice_core import warmup_ocr_engine; warmup_ocr_engine(print); print('models ready')"
+        continue-on-error: true
+
+      - name: PyInstaller 打包
+        run: python -m PyInstaller --noconfirm invoice_app_macos.spec
+
+      - name: 压缩产物为 zip（保留 macOS 元数据/权限）
+        run: ditto -c -k --keepParent "dist/发票识别.app" "invoice-ocr-macos.zip"
+
+      - name: 上传构建产物（保留 30 天）
+        uses: actions/upload-artifact@v4
+        with:
+          name: invoice-ocr-macos
+          path: invoice-ocr-macos.zip
+          retention-days: 30
+
+  # ---------- Release（仅标签推送，统一收口两个平台产物） ----------
+  release:
+    needs: [build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载全部构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: invoice-ocr-*
+          merge-multiple: true
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true
