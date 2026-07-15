@@ -112,6 +112,19 @@ pip install -r requirements.txt
 - 若仍失败，换一个网络或手机热点后重新双击 `BuildToEXE.bat`
 - 已经下载成功的依赖会保留在 `.venv` 里，重新运行会继续安装剩余部分
 
+## 🍎 macOS 使用提示
+
+从 Releases 下载并解压 `发票识别.app` 后，若双击提示「来自身份不明的开发者」或「已损坏」，这是因为 app 未做代码签名与公证，被系统拦截。可二选一绕过：
+
+- 图形界面：系统设置 → 隐私与安全性 → 找到被拦截的记录 → 点「仍要打开」
+- 或终端去掉隔离标记：
+
+```bash
+xattr -cr /Applications/发票识别.app
+```
+
+> 若要彻底「双击即用、无警告」，需做 `codesign` 签名 + Apple 公证（需付费 Apple Developer 账号）。
+
 ## 📊 输出格式
 
 | 字段 | 说明 |
